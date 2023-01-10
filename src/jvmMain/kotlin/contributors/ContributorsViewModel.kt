@@ -8,12 +8,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import tasks.*
 import variant.contributors.Variant.*
 
 class ContributorsViewModel(
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
 ) {
     var username by mutableStateOf("")
 
@@ -29,6 +30,7 @@ class ContributorsViewModel(
         private set
 
     enum class LoadingStatus { NOT_STARTED, IN_PROGRESS, COMPLETED, CANCELED }
+
     var loadingStatus by mutableStateOf(NOT_STARTED)
         private set
 
@@ -41,7 +43,13 @@ class ContributorsViewModel(
     val contributorsStateFlow: StateFlow<List<User>> get() = _contributorsStateFlow
 
     init {
-        loadInitialParams()
+        try {
+            loadInitialParams()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            removeStoredParams()
+        }
+
     }
 
     // TODO 1. Loading icon + statuses
@@ -68,38 +76,46 @@ class ContributorsViewModel(
                     val users = loadContributorsBlocking(service, req)
                     updateResults(users, startTime)
                 }
+
                 BACKGROUND -> { // Blocking a background thread
                     loadContributorsBackground(service, req) {
                         updateResults(it, startTime)
                     }
                 }
+
                 CALLBACKS -> { // Using callbacks
                     loadContributorsCallbacks(service, req) { users ->
                         updateResults(users, startTime)
                     }
                 }
+
                 SUSPEND -> { // Using coroutines
                     val users = loadContributorsSuspend(service, req)
                     updateResults(users, startTime)
                 }
+
                 CONCURRENT -> { // Performing requests concurrently
                     val users = loadContributorsConcurrent(service, req)
                     updateResults(users, startTime)
                 }
+
                 NOT_CANCELLABLE -> { // Performing requests in a non-cancellable way
                     val users = loadContributorsNotCancellable(service, req)
                     updateResults(users, startTime)
                 }
+
                 PROGRESS -> { // Showing progress
                     loadContributorsProgress(service, req) { users, completed ->
                         updateResults(users, startTime, completed)
                     }
                 }
+
                 CHANNELS -> {  // Performing requests concurrently and showing progress
                     loadContributorsChannels(service, req) { users, completed ->
                         updateResults(users, startTime, completed)
                     }
                 }
+
                 FLOW -> { // Returning results as Flow
                     // TODO leave one version
 //                    val contributorsFlow = loadContributorsFlow(service, req, scope = this)
@@ -107,6 +123,23 @@ class ContributorsViewModel(
                     contributorsFlow.collect {
                         updateResults(it.users, startTime, it.completed)
                     }
+                }
+
+                PURE_FLOW -> {
+                    val contributors = loadContributorsPureFlow(service, req)
+                    contributors
+                        .onCompletion { throwable ->
+                            if (throwable == null) {
+                                // successful completion
+                                allowLoadingAndDisableCancellation()
+                            } else {
+                                println("Oh no!")
+                                throwable.printStackTrace()
+                            }
+                        }
+                        .collect {
+                            updateResults(it, startTime)
+                        }
                 }
             }
         }
@@ -147,14 +180,18 @@ class ContributorsViewModel(
     private fun updateResults(
         users: List<User>,
         startTime: Long,
-        completed: Boolean = true
+        completed: Boolean = true,
     ) {
         loadingStatus = if (completed) COMPLETED else IN_PROGRESS
         currentLoadingTimeMillis = System.currentTimeMillis() - startTime
         _contributorsStateFlow.value = users
         if (completed) {
-            newLoadingEnabled = true
-            cancellationEnabled = false
+            allowLoadingAndDisableCancellation()
         }
+    }
+
+    private fun allowLoadingAndDisableCancellation() {
+        newLoadingEnabled = true
+        cancellationEnabled = false
     }
 }

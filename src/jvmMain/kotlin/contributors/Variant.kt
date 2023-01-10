@@ -10,4 +10,5 @@ enum class Variant {
     PROGRESS,         // Request6Progress
     CHANNELS,         // Request7Channels
     FLOW,             // Request8Flow
+    PURE_FLOW,
 }

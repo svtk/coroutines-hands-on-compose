@@ -1,30 +1,53 @@
 package tasks
 
 import contributors.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 data class UserResults(
     val users: List<User> = listOf(),
     val completed: Boolean = false,
 )
 
+suspend fun loadContributorsPureFlow(
+    service: GitHubService,
+    req: RequestData,
+): Flow<List<User>> = coroutineScope {
+    val repos = service
+        .getOrgRepos(req.org)
+        .also { logRepos(req, it) }
+        .bodyList()
+    flow {
+        for (repo in repos) {
+            val users = service.getRepoContributors(req.org, repo.name)
+                .also { logUsers(repo, it) }
+                .bodyList()
+            println("Emitting!")
+            emit(users)
+        }
+    }.runningReduce { accumulator, value ->
+        (accumulator + value).aggregate()
+    }
+}
+
 // Version without scope parameter
-// Looks fragile:
-// - putting `coroutineScope` around `for (repo in repos)` makes it hang
-// - putting `flow` around the last section `repeat(repos.size)` makes it hang
+// Potential traps:
+// - Channel needs to be UNLIMITED, otherwise this implementation will hang
 suspend fun loadContributorsFlow(
     service: GitHubService,
     req: RequestData,
-): Flow<UserResults> = flow {
+): Flow<UserResults> =
     coroutineScope {
         val repos = service
             .getOrgRepos(req.org)
             .also { logRepos(req, it) }
             .bodyList()
 
-        val channel = Channel<List<User>>()
+        val channel = Channel<List<User>>(UNLIMITED)
         for (repo in repos) {
             launch {
                 val users = service.getRepoContributors(req.org, repo.name)
@@ -33,21 +56,22 @@ suspend fun loadContributorsFlow(
                 channel.send(users)
             }
         }
-        var allUsers = emptyList<User>()
-        repeat(repos.size) {
-            val users = channel.receive()
-            allUsers = (allUsers + users).aggregate()
-            emit(UserResults(allUsers, it == repos.lastIndex))
+        flow {
+            var allUsers = emptyList<User>()
+            repeat(repos.size) {
+                val users = channel.receive()
+                allUsers = (allUsers + users).aggregate()
+                emit(UserResults(allUsers, it == repos.lastIndex))
+            }
         }
     }
-}
 
 
 // Version with scope parameter
 suspend fun loadContributorsFlow(
     service: GitHubService,
     req: RequestData,
-    scope: CoroutineScope
+    scope: CoroutineScope,
 ): Flow<UserResults> {
     val repos = service
         .getOrgRepos(req.org)
