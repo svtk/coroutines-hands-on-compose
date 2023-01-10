@@ -6,9 +6,7 @@ import androidx.compose.runtime.setValue
 import contributors.ContributorsViewModel.LoadingStatus.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import tasks.*
 import variant.contributors.Variant.*
@@ -49,7 +47,6 @@ class ContributorsViewModel(
             e.printStackTrace()
             removeStoredParams()
         }
-
     }
 
     // TODO 1. Loading icon + statuses
@@ -132,14 +129,14 @@ class ContributorsViewModel(
                             if (throwable == null) {
                                 // successful completion
                                 allowLoadingAndDisableCancellation()
+                                println("Pure Flow Contributors Done!")
                             } else {
                                 println("Oh no!")
                                 throwable.printStackTrace()
                             }
                         }
-                        .collect {
-                            updateResults(it, startTime)
-                        }
+                        .onEach { updateResults(it, startTime) }
+                        .launchIn(this)
                 }
             }
         }

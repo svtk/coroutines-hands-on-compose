@@ -16,18 +16,19 @@ data class UserResults(
 suspend fun loadContributorsPureFlow(
     service: GitHubService,
     req: RequestData,
-): Flow<List<User>> = coroutineScope {
+): Flow<List<User>> {
     val repos = service
         .getOrgRepos(req.org)
         .also { logRepos(req, it) }
         .bodyList()
-    flow {
+    return channelFlow {
         for (repo in repos) {
-            val users = service.getRepoContributors(req.org, repo.name)
-                .also { logUsers(repo, it) }
-                .bodyList()
-            println("Emitting!")
-            emit(users)
+            launch {
+                val users = service.getRepoContributors(req.org, repo.name)
+                    .also { logUsers(repo, it) }
+                    .bodyList()
+                send(users)
+            }
         }
     }.runningReduce { accumulator, value ->
         (accumulator + value).aggregate()
