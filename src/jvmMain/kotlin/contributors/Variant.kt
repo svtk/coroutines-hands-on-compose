@@ -9,6 +9,8 @@ enum class Variant {
     NOT_CANCELLABLE,  // Request6NotCancellable
     PROGRESS,         // Request6Progress
     CHANNELS,         // Request7Channels
-    FLOW,             // Request8Flow
-    PURE_FLOW,
+    FLOW_WITH_MANUAL_CHANNEL,             // Request8Flow
+    SEQUENTIAL_FLOW,
+    CHANNEL_FLOW,
+    NON_SUSPEND_CHANNEL_FLOW
 }

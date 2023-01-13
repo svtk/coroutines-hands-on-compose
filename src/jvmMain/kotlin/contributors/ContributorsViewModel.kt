@@ -113,7 +113,7 @@ class ContributorsViewModel(
                     }
                 }
 
-                FLOW -> { // Returning results as Flow
+                FLOW_WITH_MANUAL_CHANNEL -> { // Returning results as Flow
                     // TODO leave one version
 //                    val contributorsFlow = loadContributorsFlow(service, req, scope = this)
                     val contributorsFlow = loadContributorsFlow(service, req)
@@ -122,14 +122,51 @@ class ContributorsViewModel(
                     }
                 }
 
-                PURE_FLOW -> {
-                    val contributors = loadContributorsPureFlow(service, req)
+                SEQUENTIAL_FLOW -> {
+                    val contributors = loadContributorsSequentialFlow(service, req)
                     contributors
                         .onCompletion { throwable ->
                             if (throwable == null) {
                                 // successful completion
                                 allowLoadingAndDisableCancellation()
-                                println("Pure Flow Contributors Done!")
+                                println("Sequential Flow Contributors Done!")
+                            } else {
+                                println("Oh no!")
+                                throwable.printStackTrace()
+                            }
+                        }
+                        .onEach { updateResults(it, startTime) }
+                        .launchIn(this)
+                }
+
+                CHANNEL_FLOW -> {
+                    val contributors = loadContributorsChannelFlow(service, req)
+                    contributors
+                        .onCompletion { throwable ->
+                            if (throwable == null) {
+                                // successful completion
+                                allowLoadingAndDisableCancellation()
+                                println("Channel Flow Contributors Done!")
+                            } else {
+                                println("Oh no!")
+                                throwable.printStackTrace()
+                            }
+                        }
+                        .onEach { updateResults(it, startTime) }
+                        .launchIn(this)
+                }
+
+                NON_SUSPEND_CHANNEL_FLOW -> {
+                    val contributors = loadContributorsChannelFlowNonSuspend(service, req)
+                    // ^ Notice the absence of suspense here! This statement is perfectly fine
+                    // outside a CoroutineScope!
+
+                    contributors
+                        .onCompletion { throwable ->
+                            if (throwable == null) {
+                                // successful completion
+                                allowLoadingAndDisableCancellation()
+                                println("Channel Flow Contributors Done!")
                             } else {
                                 println("Oh no!")
                                 throwable.printStackTrace()

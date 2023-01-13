@@ -1,6 +1,8 @@
 package contributors
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -11,7 +13,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.GET
 import retrofit2.http.Path
-import java.util.Base64
+import java.util.*
 
 interface GitHubService {
     @GET("orgs/{org}/repos?per_page=100")
@@ -27,26 +29,39 @@ interface GitHubService {
 
     @GET("orgs/{org}/repos?per_page=100")
     suspend fun getOrgRepos(
-        @Path("org") org: String
+        @Path("org") org: String,
     ): Response<List<Repo>>
 
     @GET("repos/{owner}/{repo}/contributors?per_page=100")
     suspend fun getRepoContributors(
         @Path("owner") owner: String,
-        @Path("repo") repo: String
+        @Path("repo") repo: String,
     ): Response<List<User>>
+}
+
+
+// TODO: A better example would have something here where this data is refreshed regularly and sent back.
+// Then it really makes sense to have this be a flow, because it's a stream of values over time.
+// Right now it's just a single value, but still serves to demonstrate how you can get rid of the `suspend`
+// Modifier in your function signature.
+// Can't have this one inside the interface, otherwise retrofit gets mad, so extension function it is
+fun GitHubService.getOrgReposFlow(org: String): Flow<Response<List<Repo>>> {
+    return flow {
+        val repos = getOrgRepos(org)
+        emit(repos)
+    }
 }
 
 @Serializable
 data class Repo(
     val id: Long,
-    val name: String
+    val name: String,
 )
 
 @Serializable
 data class User(
     val login: String,
-    val contributions: Int
+    val contributions: Int,
 )
 
 @Serializable
