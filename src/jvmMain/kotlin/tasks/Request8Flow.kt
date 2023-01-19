@@ -128,14 +128,17 @@ fun loadContributorsChannelFlowNonSuspend(
     // a stream of these values over time (i.e. if there is an interval at which the information
     // inside `repoResponses` is refreshed.)
     // This whole function can now react to changes emitted from the service!
-    val repos = repoResponses.onEach {
+
+    // Here's some third-party materials that talk about naming flows in the potential presence of name clashes:
+    // https://github.com/JuulLabs/kotlin-guides
+    val reposFlow = repoResponses.onEach {
         logRepos(req, it)
     }.map {
         it.bodyList()
     }
 
     return channelFlow {
-        repos.onEach { repos ->
+        reposFlow.onEach { repos ->
             for (repo in repos) {
                 launch {
                     val users = service.getRepoContributors(req.org, repo.name)
